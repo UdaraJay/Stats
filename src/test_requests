@@ -1,0 +1,11 @@
+### Record an event with a name and a URL
+http://localhost:8080/collect?collector_id=01HQCBTCX3QEJ16DNYWHZQX8P1&name=ready&url=http%3A%2F%2Flocalhost%3A8080%2F
+
+### List last 100 events
+GET http://localhost:8080/events HTTP/1.1
+
+### Summarized events
+GET http://localhost:8080/summary HTTP/1.1  
+
+### Embeddable stats.js for collecting analytics
+GET http://localhost:8080/stats.js HTTP/1.1  

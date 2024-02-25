@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Viewport for responsive web design -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>STATS</title>
+
+    <!-- SEO Meta Tags -->
+    <meta
+      name="description"
+      content="A concise description of the page content goes here."
+    />
+    <meta name="keywords" content="stats, analytics, software" />
+    <meta name="author" content="Udara" />
+
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="STATS" />
+    <meta property="og:description" content="A minimal analytics provider" />
+    <meta property="og:image" content="og.png" />
+    <meta property="og:url" content="https://stats.udara.io" />
+    <meta property="og:type" content="website" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="favico.png" />
+
+    <!-- External CSS -->
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="sidebar">
+      <div class="metrics">
+        <div class="live">
+          <div class="switch"><div id="live" class="bubble"></div></div>
+          <div class="label">Live</div>
+        </div>
+        <div class="primary">
+          <div class="primaryMetric">
+            <div class="number" id="sessionsInLastTwentyFourHours"></div>
+            <div class="label">sessions / 24 hours</div>
+          </div>
+          <div class="primaryMetric">
+            <div class="number" id="eventsInLastTwentyFourHours">8038</div>
+            <div class="label">events / 24 hours</div>
+          </div>
+          <div class="primaryMetric">
+            <div class="number" id="eventsInLastHour">123</div>
+            <div class="label">events / 1 hours</div>
+          </div>
+          <div class="primaryMetric">
+            <div class="number" id="eventsInLastFiveMinutes">3</div>
+            <div class="label">events / 5 minutes</div>
+          </div>
+        </div>
+        <div class="secondary"></div>
+      </div>
+      <div class="footer">
+        <a href="https://udara.io">Stats MK2</a>
+      </div>
+    </div>
+    <div id="content">
+      <div id="header"></div>
+      <div id="hourly"></div>
+      <div id="urls"></div>
+      <div id="sessions"></div>
+    </div>
+
+    <script src="script.js"></script>
+
+    <script>
+      // Stats analytics
+      var head = document.head || document.getElementsByTagName("head")[0];
+      var script = document.createElement("script");
+      script.setAttribute("src", "http://localhost:5775/stats.js");
+      script.setAttribute("onload", () => window.stats_collect());
+      script.setAttribute("type", "text/javascript");
+      script.setAttribute("charset", "utf8");
+      script.setAttribute("async", "");
+      head.appendChild(script);
+    </script>
+  </body>
+</html>

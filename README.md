@@ -24,6 +24,7 @@ RUST_LOG=debug cargo run
 ```
 cargo build --release
 ```
+This will create the executable file you need in the /target/release/ folder
 
 **Embed events collector** <br/>
 You use this to automatically collect pageviews or other events triggered by calling `stats_collect('event_name', 'optinal_url_override')` from javascript once the script below is initialized.
@@ -43,8 +44,6 @@ When you add this script to a new domain, you must add them to the `CORS_DOMAINS
   head.appendChild(script);
 </script>
 ```
-
-This will create the executable file you need in the `/target/release/` folder 
 
 ## Setup
 

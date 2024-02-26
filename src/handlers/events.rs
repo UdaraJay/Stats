@@ -4,17 +4,13 @@ use crate::utils::queue::EventsQueue;
 use actix_web::{web, HttpResponse, Responder};
 use chrono::{Duration, NaiveDate, NaiveDateTime, Utc};
 use diesel::prelude::*;
+use diesel::sql_types::Text;
 use diesel::sql_types::{BigInt, Date, Integer, Timestamp};
-use log::{info, warn};
+use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::{Arc, Mutex};
-use ulid::Ulid; // Make sure to include serde_json for JSON handling
-
-use diesel::deserialize::FromSqlRow;
-use diesel::row::Row;
-use diesel::sql_types::Text;
-use diesel::QueryResult;
+use ulid::Ulid;
 
 #[derive(QueryableByName, Debug, Serialize)]
 pub struct EventCounts {
@@ -118,8 +114,6 @@ pub async fn record_event(
     events_queue: web::Data<Arc<Mutex<EventsQueue>>>,
     item: web::Query<EventQuery>,
 ) -> impl Responder {
-    info!("Record: Event {}", item.name);
-
     // Construct a NewEvent object
     let new_event = NewEvent {
         id: Ulid::new().to_string(),
@@ -130,11 +124,17 @@ pub async fn record_event(
     };
 
     // Attempt to push the new event onto the analytics queue
-    match events_queue.lock().unwrap().push(new_event) {
-        Ok(_) => HttpResponse::Ok().json("Event recorded successfully"),
+    match events_queue.lock() {
+        Ok(mut queue) => match queue.push(new_event) {
+            Ok(_) => HttpResponse::Ok().json("Event recorded successfully"),
+            Err(e) => {
+                warn!("Failed to record event: {}", e);
+                HttpResponse::InternalServerError().json("Error recording event")
+            }
+        },
         Err(e) => {
-            warn!("Failed to record event: {}", e);
-            HttpResponse::InternalServerError().json("Error recording event")
+            error!("Failed to acquire lock on events queue: {:?}", e);
+            HttpResponse::InternalServerError().json("Server error")
         }
     }
 }
@@ -205,7 +205,8 @@ pub async fn retrieve_url_event_counts(pool: web::Data<DbPool>) -> impl Responde
         FROM events
         WHERE timestamp > ?
         GROUP BY url
-        ORDER BY count DESC;
+        ORDER BY count DESC
+        LIMIT 25;
     ";
 
     let results: Result<Vec<UrlEventCount>, diesel::result::Error> = diesel::sql_query(sql)

@@ -4,20 +4,23 @@
     <meta charset="UTF-8" />
     <!-- Viewport for responsive web design -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>STATS</title>
+    <title>Stats analytics</title>
 
     <!-- SEO Meta Tags -->
     <meta
       name="description"
-      content="A concise description of the page content goes here."
+      content="Standalone analytics provider and realtime dashboard."
     />
     <meta name="keywords" content="stats, analytics, software" />
     <meta name="author" content="Udara" />
 
     <!-- Open Graph Meta Tags -->
-    <meta property="og:title" content="STATS" />
-    <meta property="og:description" content="A minimal analytics provider" />
-    <meta property="og:image" content="og.png" />
+    <meta property="og:title" content="Stats analytics" />
+    <meta
+      property="og:description"
+      content="Standalone analytics provider and realtime dashboard."
+    />
+    <meta property="og:image" content="https://stats.udara.io/og.png" />
     <meta property="og:url" content="https://stats.udara.io" />
     <meta property="og:type" content="website" />
 
@@ -55,11 +58,16 @@
         <div class="secondary"></div>
       </div>
       <div class="footer">
-        <a href="https://udara.io">Stats MK2</a>
+        <a href="https://udara.io"
+          ><img src="favico.png" height="20px" alt="Stats Analytics"
+        /></a>
       </div>
     </div>
     <div id="content">
-      <div id="header"></div>
+      <div id="header">
+        <b>Stats Analytics</b> –
+        <span id="headerTime"></span>
+      </div>
       <div id="hourly"></div>
       <div id="urls"></div>
       <div id="sessions"></div>
@@ -71,7 +79,7 @@
       // Stats analytics
       var head = document.head || document.getElementsByTagName("head")[0];
       var script = document.createElement("script");
-      script.setAttribute("src", "http://localhost:5775/stats.js");
+      script.setAttribute("src", "https://stats.udara.io/stats.js");
       script.setAttribute("onload", () => window.stats_collect());
       script.setAttribute("type", "text/javascript");
       script.setAttribute("charset", "utf8");

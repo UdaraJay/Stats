@@ -8,10 +8,8 @@ pub async fn welcome() -> impl Responder {
  ___) || |/ ___ \| |  ___) |
 |____/ |_/_/   \_\_| |____/                       
 
-+ STATS 2                                             
-+ A minimal analytics provider                         
-+ Use /record to record an event                       
-+ Use /events to retrieve recorded events                                            
++ STATS ANALYTICS                                           
++ A minimal analytics provider                                                                  
 
 "#;
 

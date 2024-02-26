@@ -17,7 +17,27 @@ fn generate_analytics_js(cid: &str, app_url: &str) -> String {
     var collectorId = "{}";
     var appUrl = "{}";
 
+
+
     function init() {{
+        // check api to see if collector is expired
+        // if expired, get a new collector id
+        // if not expired, continue with the current collector id
+
+        // function checkCollectorStatus() {{
+        //     var url = new URL(appUrl + "/collectors/" + collectorId);
+        //     fetch(url)
+        //     .then(res => res.json())
+        //     .then(data => {{
+        //         console.log("📼", "collector refreshed");
+        //     }})
+        //     .catch(rejected => {{
+        //         console.log("📼", "failed to check collector status, continuing with existing collector.");
+        //     }});
+        // }}
+
+        // checkCollectorStatus();
+
         document.addEventListener('click', function(event) {{
             if (event.target.tagName === 'A') {{
                 var target = event.target.getAttribute('target');
@@ -34,6 +54,25 @@ fn generate_analytics_js(cid: &str, app_url: &str) -> String {
 
         window.addEventListener("beforeunload", function(event) {{
             stats_collect('exit');
+        }});
+
+        // Listen for history changes
+        function wrapHistoryMethod(method) {{
+            var original = history[method];
+            history[method] = function(state, title, url) {{
+                var fullUrl = new URL(url, window.location.origin).href;
+                console.log("📼 history", method, url, fullUrl);
+                original.apply(this, arguments);
+                stats_collect('visit', fullUrl);
+            }};
+        }}
+    
+        wrapHistoryMethod('pushState');
+        wrapHistoryMethod('replaceState');
+    
+        // Listen for popstate event
+        window.addEventListener('popstate', function(event) {{
+            stats_collect('visit', location.href);
         }});
     }}
 

@@ -60,14 +60,12 @@ a {
 
 #sidebar {
   position: fixed;
-  height: 100vh; /* Full viewport height */
-  left: 0; /* Align to the right */
-  top: 0; /* Align to the top */
-  overflow-y: auto; /* Allows scrolling within the sidebar if content overflows */
-  /* grid-column: 1 / 2; */
+  height: 100vh;
+  left: 0;
+  top: 0;
+  overflow-y: auto;
   width: var(--sidebar-width);
-
-  padding: 26px 32px;
+  padding: 26px;
   height: 100vh;
   display: flex;
   flex-direction: column;
@@ -108,7 +106,7 @@ a {
   border-radius: 90px;
   animation: pulse 3s infinite;
   transition: background-color 1s ease;
-  background-color: rgb(255, 177, 74);
+  background-color: #ff421a;
 }
 
 @keyframes pulse {
@@ -118,7 +116,7 @@ a {
   }
   50% {
     transform: scale(0.9);
-    background-color: rgb(255, 177, 74);
+    background-color: #ff421a;
   }
   100% {
     transform: scale(1);
@@ -152,6 +150,17 @@ a {
   margin: 27px 32px;
 }
 
+#header {
+  font-size: 14px;
+  margin-bottom: 10px;
+  color: #777;
+}
+
+#header b {
+  font-weight: 450;
+  color: #999;
+}
+
 #analytics,
 #events {
   padding: 20px;
@@ -160,13 +169,43 @@ a {
 .sessions {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 10px;
 }
 
 .session {
-  border-bottom: 1px solid #333;
-  padding-bottom: 20px;
+  border-top: 1px solid #222;
+  padding-top: 12px;
   color: #fff;
+}
+
+.session .top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.session .top .right .duration {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.session .top .right .duration .item {
+  text-align: center;
+  background: #222;
+  font-family: var(--font-mono);
+  line-height: 25px;
+  height: 24px;
+  font-size: 14px;
+  padding: 0 6px;
+}
+
+.session .top .right .duration .item b {
+  color: #999;
+  font-weight: 400;
+  margin-left: 1px;
 }
 
 .session .events {
@@ -201,10 +240,12 @@ a {
 .session .events .event .name {
   flex: 0 1 100px;
   font-weight: 500;
+  text-transform: uppercase;
 }
 
 .session .events .event .left .host {
-  flex: 1 1 100px;
+  flex: 0 0 160px;
+  margin-right: 20px;
 }
 .session .events .event .left .path {
   flex: 4 1 100px;
@@ -243,16 +284,16 @@ a {
 }
 
 .hourly .col .bar .bar-fill {
-  background: rgb(255, 177, 74);
+  background: #ff421a;
 }
 
 .hourly .col .hour {
-  font-size: 13px;
+  font-size: 12px;
   margin-top: 8px;
 }
 
 .hourly .col .current {
-  color: rgb(255, 177, 74);
+  color: #ff421a;
 }
 
 .urls {
@@ -260,6 +301,12 @@ a {
   padding: 16px 22px;
   border-radius: 18px;
   margin: 10px 0;
+}
+
+.urls .top {
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: #fff;
 }
 
 .urls .url {
@@ -270,7 +317,7 @@ a {
 }
 
 .urls .url .left {
-  flex: 0 0 65px;
+  flex: 0 0 77px;
   font-weight: 450;
 }
 
@@ -278,19 +325,21 @@ a {
   flex: 1 0 auto;
   display: flex;
   align-items: center;
+  color: #888;
+  font-size: 14px;
 }
 
 .urls .url .right .host {
   flex: 0 0 140px;
-  color: #888;
   margin-right: 30px;
 }
 
 .urls .url .right .path {
-  color: #fff;
 }
 
 .footer {
+  display: flex;
+  align-items: center;
   font-size: 14px;
   color: #666;
 }

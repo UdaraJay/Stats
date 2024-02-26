@@ -19,7 +19,7 @@ pub async fn retrieve_sessions(pool: web::Data<DbPool>) -> impl Responder {
 
     let results = collectors::table
         .order(collectors::timestamp.desc())
-        .limit(50)
+        .limit(30)
         .load::<Collector>(&mut conn)
         .expect("Error loading collectors");
 

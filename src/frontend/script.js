@@ -117,12 +117,20 @@ async function renderUrls() {
 
   urlsDiv.innerHTML = `
                 <div class="urls">
+                <div class="top">Top paths</div>
                     ${urls
                       .map((url) => {
                         // parse url into host and path
-                        const urlObj = new URL(url.url);
-                        const host = urlObj.host;
-                        const path = urlObj.pathname + urlObj.search;
+                        let host, path;
+
+                        try {
+                          const urlObj = new URL(url.url);
+                          host = urlObj.host;
+                          path = urlObj.pathname + urlObj.search;
+                        } catch (err) {
+                          host = "";
+                          path = url.url;
+                        }
 
                         return `<div class="url">
 
@@ -143,58 +151,103 @@ async function renderUrls() {
             `;
 }
 
+function prettyPrintTimeDifference(utcTimestamp1, utcTimestamp2) {
+  try {
+    // Parse the UTC timestamp strings to Date objects
+    const date1 = new Date(utcTimestamp1);
+    const date2 = new Date(utcTimestamp2);
+
+    if (isNaN(date1.getTime()) || isNaN(date2.getTime())) {
+      return ["00", "00", "00"];
+    }
+
+    // Calculate the difference in milliseconds
+    const differenceInMilliseconds = Math.abs(date2 - date1);
+
+    // Convert to total seconds
+    const totalSeconds = Math.floor(differenceInMilliseconds / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    // Format as HH:MM:SS
+    const formatted = [
+      hours.toString().padStart(2, "0"),
+      minutes.toString().padStart(2, "0"),
+      seconds.toString().padStart(2, "0"),
+    ];
+
+    return formatted;
+  } catch (error) {
+    // Return default value in case of any errors
+    return ["00", "00", "00"];
+  }
+}
+
 async function renderSessions() {
   const response = await fetch("/sessions");
   const sessions = await response.json();
   const sessionsDiv = document.getElementById("sessions");
 
   sessionsDiv.innerHTML = `
-                <div class="sessions">
-                    ${sessions
-                      .map((session) => {
-                        return `<div class="session">
-                            <div class="top">
-                            
-                            </div>
-                            ${session.events?.length} event${
-                          session.events?.length !== 1 ? "s" : ""
-                        } → from ${session.collector.city}, ${
-                          session.collector.country
-                        } →
-                        ${formatFromNow(session.collector.timestamp)} → ${
-                          session.collector.origin
-                        }
-                              <div class="events">
-                                  ${session.events
-                                    .reverse()
-                                    .map((event) => {
-                                      const url = new URL(event.url);
-                                      const host = url.host;
-                                      const path = url.pathname + url.search;
+    <div class="sessions">
+      ${sessions
+        .map((session) => {
+          const duration = prettyPrintTimeDifference(
+            session.events[0]?.timestamp,
+            session.events[session.events.length - 1]?.timestamp
+          );
 
-                                      return `
-                                      <div class="event">
-                                        <div class="left">
-                                            <div class="name">${
-                                              event.name
-                                            }</div>
-                                            <div class="host">${host}</div>
-                                            <div class="path">${path}</div>
-                                        </div>
-                                        <div class="right">
-                                            <div class="time">${formatFromNow(
-                                              event.timestamp
-                                            )}</div>
-                                        </div>
-                                      </div>
-                                      `;
-                                    })
-                                    .join("")}
-                              </div>
-                              </div>
-                              `;
-                      })
-                      .join("")}
+          return `<div class="session">
+              <div class="top">
+                <div class="left">
+                ${session.events?.length} event${
+            session.events?.length !== 1 ? "s" : ""
+          } → from ${session.collector.city}, ${session.collector.country}
+                </div>
+                <div class="right">
+                  <div class="duration">
+                    <div class="item">${duration[0]}<b>H</b></div>
+                    <div class="item">${duration[1]}<b>M</b></div>
+                    <div class="item">${duration[2]}<b>S</b></div>
+                  </div>
+                </div>
+              </div>
+           
+        <div class="events">
+            ${session.events
+              // .reverse()
+              .map((event) => {
+                let host, path;
+
+                try {
+                  const urlObj = new URL(event.url);
+                  host = urlObj.host;
+                  path = urlObj.pathname + urlObj.search;
+                } catch (err) {
+                  host = "";
+                  path = event.url;
+                }
+
+                return `
+                <div class="event">
+                  <div class="left">
+                      <div class="name">${event.name}</div>
+                      <div class="host">${host}</div>
+                      <div class="path">${path}</div>
+                  </div>
+                  <div class="right">
+                      <div class="time">${formatFromNow(event.timestamp)}</div>
+                  </div>
+                </div>
+                `;
+              })
+              .join("")}
+          </div>
+      </div>
+          `;
+        })
+        .join("")}
 
 
                 </div>
@@ -212,7 +265,7 @@ async function renderSummary() {
   });
 }
 async function renderHeader() {
-  const sessionsDiv = document.getElementById("header");
+  const sessionsDiv = document.getElementById("headerTime");
   const now = new Date();
   const options = {
     weekday: "long",

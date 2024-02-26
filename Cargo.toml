@@ -18,3 +18,7 @@ ulid = "0.4"
 maxminddb = "0.24.0"
 log = "0.4"
 env_logger = "0.9"
+
+[profile.release]
+codegen-units = 1
+lto = "fat"

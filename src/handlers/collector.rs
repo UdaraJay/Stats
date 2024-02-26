@@ -21,7 +21,6 @@ fn generate_analytics_js(cid: &str, app_url: &str) -> String {
         // check api to see if collector is expired
         // if expired, get a new collector id
         // if not expired, continue with the current collector id
-
         // function checkCollectorStatus() {{
         //     var url = new URL(appUrl + "/collectors/" + collectorId);
         //     fetch(url)
@@ -42,10 +41,7 @@ fn generate_analytics_js(cid: &str, app_url: &str) -> String {
                 var href = event.target.getAttribute('href');
                 
                 if (target === '_blank') {{
-                    stats_collect('external_link_click', href);
-                }} else {{
-                    var url = new URL(href, window.location.origin);
-                    stats_collect('link_click', url.href);
+                    stats_collect('leave', href);
                 }}
             }}
         }});

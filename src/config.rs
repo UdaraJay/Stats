@@ -8,14 +8,14 @@ pub struct Config {
     pub service_port: String,
     pub database_url: String,
     pub cors_domains: Vec<String>,
-    pub PROCESSING_BATCH_SIZE: usize,
+    pub processing_batch_size: usize,
 }
 
 impl Config {
     pub fn new() -> Self {
         dotenv().ok();
 
-        let PROCESSING_BATCH_SIZE = env::var("PROCESSING_BATCH_SIZE")
+        let processing_batch_size = env::var("PROCESSING_BATCH_SIZE")
             .unwrap_or_else(|_| "4".to_string())
             .parse::<usize>()
             .expect("Failed to set memory limit");
@@ -39,7 +39,7 @@ impl Config {
             service_port,
             database_url,
             cors_domains,
-            PROCESSING_BATCH_SIZE,
+            processing_batch_size,
         }
     }
 }

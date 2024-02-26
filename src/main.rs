@@ -9,31 +9,35 @@ mod utils;
 use crate::config::Config;
 use crate::db::establish_connection_pool;
 use crate::handlers::{collector, events, sessions};
-use crate::utils::queue::{start_processing_events, EventsQueue};
+use crate::models::NewEvent;
+use crate::utils::queue::process_events_async;
 use actix_files as fs;
 use actix_web::{web, App, HttpServer};
 use env_logger;
 use log::info;
 use middleware::cors::setup_cors;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::mpsc;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init();
 
-    // let config: Config = Config::new();
     let config = Arc::new(Config::new());
     let address = format!("127.0.0.1:{}", config.service_port);
     let pool = establish_connection_pool();
 
-    info!("STATS – A minimal analytics provider");
-    info!("Starting server at http://{}", address);
+    info!("Stats analytics");
+    info!("Starting server at `http://{}", address);
 
-    // Setup the background processing thread
-    let events_queue = Arc::new(Mutex::new(EventsQueue::new(
-        config.memory_limit_mb * 1024 * 1024,
-    )));
-    start_processing_events(web::Data::new(pool.clone()), events_queue.clone());
+    // Setup the MPSC channel
+    let (events_queue, rx) = mpsc::channel::<NewEvent>(500);
+
+    // Start the event processing task
+    let db_pool = pool.clone();
+    tokio::spawn(async move {
+        process_events_async(rx, db_pool).await;
+    });
 
     HttpServer::new(move || {
         App::new()

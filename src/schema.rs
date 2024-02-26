@@ -2,7 +2,7 @@
 
 diesel::table! {
     collectors (id) {
-        id -> Text,
+        id -> Nullable<Text>,
         origin -> Text,
         country -> Text,
         city -> Text,
@@ -12,7 +12,7 @@ diesel::table! {
 
 diesel::table! {
     events (id) {
-        id -> Text,
+        id -> Nullable<Text>,
         url -> Text,
         name -> Text,
         timestamp -> Timestamp,
@@ -20,4 +20,7 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(collectors, events,);
+diesel::allow_tables_to_appear_in_same_query!(
+    collectors,
+    events,
+);

@@ -72,6 +72,6 @@ These options must be defined in a `.env` file before starting the server.
 |  SERVICE_PORT | 5775  | Port you want the service to be hosted from  |
 |  DATABASE_URL | /data/stats.sqlite  | Path to .sqlite file to use as database.  |
 |  CORS_DOMAINS | http://localhost:5775,https://udara.io  | Comma-separated list of allowed domains. The service will only accept analytics events from these domains.   |
-|  MEMORY_LIMIT_MB | 5  | Max limit for events buffer used to queue and batch analytics events for processing. When the limit is hit, new events are dropped until items are processed from the queue. |
+|  PROCESSING_BATCH_SIZE | 5  | Max limit for events buffer used to queue and batch analytics events for processing. When the limit is hit, new events are dropped until items are processed from the queue. |
 
 

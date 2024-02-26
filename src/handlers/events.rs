@@ -1,15 +1,14 @@
 use crate::db::DbPool;
 use crate::models::{Event, NewEvent};
-use crate::utils::queue::EventsQueue;
 use actix_web::{web, HttpResponse, Responder};
 use chrono::{Duration, NaiveDate, NaiveDateTime, Utc};
 use diesel::prelude::*;
 use diesel::sql_types::Text;
 use diesel::sql_types::{BigInt, Date, Integer, Timestamp};
-use log::{error, info, warn};
+use log::info;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::sync::{Arc, Mutex};
+use tokio::sync::mpsc::Sender;
 use ulid::Ulid;
 
 #[derive(QueryableByName, Debug, Serialize)]
@@ -111,7 +110,7 @@ pub async fn summarize_events_json(pool: web::Data<DbPool>) -> impl Responder {
 }
 
 pub async fn record_event(
-    events_queue: web::Data<Arc<Mutex<EventsQueue>>>,
+    events_queue: web::Data<Sender<NewEvent>>,
     item: web::Query<EventQuery>,
 ) -> impl Responder {
     // Construct a NewEvent object
@@ -123,18 +122,11 @@ pub async fn record_event(
         collector_id: item.collector_id.clone(),
     };
 
-    // Attempt to push the new event onto the analytics queue
-    match events_queue.lock() {
-        Ok(mut queue) => match queue.push(new_event) {
-            Ok(_) => HttpResponse::Ok().json("Event recorded successfully"),
-            Err(e) => {
-                warn!("Failed to record event: {}", e);
-                HttpResponse::InternalServerError().json("Error recording event")
-            }
-        },
-        Err(e) => {
-            error!("Failed to acquire lock on events queue: {:?}", e);
-            HttpResponse::InternalServerError().json("Server error")
+    match events_queue.send(new_event).await {
+        Ok(_) => HttpResponse::Ok().json("Event recorded successfully"),
+        Err(_) => {
+            eprintln!("Failed to send event to the processing channel.");
+            HttpResponse::ServiceUnavailable().json("Failed to process event")
         }
     }
 }

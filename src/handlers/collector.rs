@@ -6,7 +6,7 @@ use actix_web::{http, web, HttpRequest, HttpResponse, Responder};
 use chrono::Utc;
 use diesel::prelude::*;
 use diesel::result::Error;
-use log::{info, warn};
+use log::warn;
 use std::sync::Arc;
 use ulid::Ulid;
 
@@ -16,8 +16,6 @@ fn generate_analytics_js(cid: &str, app_url: &str) -> String {
 (function() {{
     var collectorId = "{}";
     var appUrl = "{}";
-
-
 
     function init() {{
         // check api to see if collector is expired

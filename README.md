@@ -1,6 +1,6 @@
 # Stats
 
-Stats is a high-performance, standalone analytics provider designed for self-hosting, enabling the collection and viewing of event data from websites, apps, and more through a web API.
+Stats is a high-performance, standalone analytics provider designed for self-hosting, enabling the collection and viewing of event data from websites, apps, and more through a web API. It comes with a real-time dashboard and is ideal as a minimal and privacy-preserving analytics solution for small to medium traffic services.
 
 **`Current status: it works, but it's not finished.`**
 

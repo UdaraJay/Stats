@@ -1,6 +1,6 @@
 # Stats
 
-Stats is a high-performance, standalone analytics provider designed for self-hosting, enabling the collection and viewing of event data from websites, apps, and more through a web API. This second iteration is written in Rust, offering enhanced portability and performance, maintaining a low memory footprint under 15MB in typical uses.
+Stats is a high-performance, standalone analytics provider designed for self-hosting, enabling the collection and viewing of event data from websites, apps, and more through a web API.
 
 **`Current status: it works, but it's not finished.`**
 

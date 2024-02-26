@@ -4,6 +4,8 @@ Stats is a high-performance, standalone analytics provider designed for self-hos
 
 **`Current status: it works, but it's not finished.`**
 
+![Stats dashboard on iPad](./preview.jpeg)
+
 ### Key-features
 - Real-time analytics and dashboard
 - Lightweight and efficient, with minimal resource usage

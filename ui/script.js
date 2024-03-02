@@ -21,15 +21,11 @@ function mapHourlyEventsToLocalTime(events) {
   // Get the current time in the user's local timezone
   const now = new Date();
   let startOfCustomDay = new Date(now);
-
-  // Adjust the startOfCustomDay to 6 AM of the current or previous day
-  if (now.getHours() < 6) {
-    // If it's earlier than 6 AM, the custom day started the previous day
-    startOfCustomDay.setDate(now.getDate() - 1);
-  }
-  startOfCustomDay.setHours(6, 0, 0, 0); // Set to 6 AM
+  // Start at 12am
+  startOfCustomDay.setHours(0, 0, 0, 0);
 
   // Create an array to represent each hour of the custom 24-hour day
+  // and map our timezone-adjusted hours to it
   let customDayHours = new Array(24).fill().map((_, index) => {
     const hourDate = new Date(startOfCustomDay.getTime() + index * 3600 * 1000);
     let hours = hourDate.getHours();
@@ -116,8 +112,11 @@ async function renderUrls() {
   const urlsDiv = document.getElementById("urls");
 
   urlsDiv.innerHTML = `
-                <div class="urls">
-                <div class="top">Top paths</div>
+                <div class="tablecard">
+                <div class="top">
+                  <div class="left">Top paths</div>
+                  <div class="right">Last 7 days</div>
+                </div>
                     ${urls
                       .map((url) => {
                         // parse url into host and path
@@ -132,7 +131,7 @@ async function renderUrls() {
                           path = url.url;
                         }
 
-                        return `<div class="url">
+                        return `<div class="item">
 
                         <div class="left">
                         <div class="time">${url.count}</div>
@@ -143,6 +142,70 @@ async function renderUrls() {
                         </div>
                       </div>
                               `;
+                      })
+                      .join("")}
+
+
+                </div>
+            `;
+}
+
+async function renderBrowsers() {
+  const response = await fetch("/summary/osbrowsers");
+  const urls = await response.json();
+  const urlsDiv = document.getElementById("browsers");
+
+  urlsDiv.innerHTML = `
+                <div class="tablecard">
+                <div class="top">
+                  <div class="left">Top browsers</div>
+                  <div class="right">Last 7 days</div>
+                </div>
+                    ${urls
+                      .map((url) => {
+                        return `<div class="item">
+                          <div class="left">
+                          <div class="time">${url.count}</div>
+                          </div>
+                          <div class="right">
+                              <div class="host">${url.os}</div>
+                              <div class="path">${url.browser}</div>
+                          </div>
+                        </div>
+                                `;
+                      })
+                      .join("")}
+
+
+                </div>
+            `;
+}
+
+async function renderReferrers() {
+  const response = await fetch("/summary/referrers");
+  const urls = await response.json();
+  const urlsDiv = document.getElementById("referrers");
+
+  urlsDiv.innerHTML = `
+                <div class="tablecard">
+                <div class="top">
+                  <div class="left">Top referrers</div>
+                  <div class="right">Last 7 days</div>
+                </div>
+                    ${urls
+                      .map((url) => {
+                        return `<div class="item">
+                          <div class="left">
+                          <div class="time">${url.count}</div>
+                          </div>
+                          <div class="right">
+                              <div class="host">${url.domain.replace(
+                                /\/$/,
+                                ""
+                              )}</div>
+                          </div>
+                        </div>
+                                `;
                       })
                       .join("")}
 
@@ -179,7 +242,6 @@ function prettyPrintTimeDifference(utcTimestamp1, utcTimestamp2) {
 
     return formatted;
   } catch (error) {
-    // Return default value in case of any errors
     return ["00", "00", "00"];
   }
 }
@@ -264,6 +326,35 @@ async function renderSummary() {
     }
   });
 }
+
+const renderSinglePercentageChange = (element, percentage) => {
+  const ele = document.getElementById(element);
+  let text = "-";
+  if (percentage < 0) {
+    ele.classList.remove("pos");
+    ele.classList.add("neg");
+    text = `↓${Math.abs(Math.round(percentage * 10) / 10)}%`;
+  } else if (percentage > 0) {
+    ele.classList.remove("neg");
+    ele.classList.add("pos");
+    text = `↑${Math.round(percentage * 10) / 10}%`;
+  } else {
+    ele.classList.remove("pos");
+    ele.classList.remove("neg");
+    text = "0%";
+  }
+  ele.innerText = text;
+};
+
+async function renderPercentageChanges() {
+  const percentagesResponse = await fetch("/summary/percentages");
+  const percentages = await percentagesResponse.json();
+
+  renderSinglePercentageChange("pDay", percentages.day);
+  renderSinglePercentageChange("pWeek", percentages.week);
+  renderSinglePercentageChange("pMonth", percentages.month);
+}
+
 async function renderHeader() {
   const sessionsDiv = document.getElementById("headerTime");
   const now = new Date();
@@ -279,37 +370,149 @@ async function renderHeader() {
   sessionsDiv.innerText = localeDateTime;
 }
 
+function convertUtcToLocal(utcDay, utcHour, offset) {
+  // Calculate new hour based on offset
+  let localHour = utcHour - offset;
+
+  // Initialize local day as UTC day
+  let localDay = utcDay;
+
+  // Adjust the local day and hour based on the new calculated hour
+  if (localHour < 0) {
+    localHour += 24; // Adjust hour to local time
+    localDay = (localDay + 6) % 7; // Go to previous day
+  } else if (localHour >= 24) {
+    localHour -= 24; // Adjust hour to local time
+    localDay = (localDay + 1) % 7; // Go to next day
+  }
+
+  return { localDay, localHour };
+}
+
+async function renderWeeklyHeatmap() {
+  const response = await fetch("/summary/weekly");
+  const utcEventCounts = await response.json();
+  const heatmapDiv = document.getElementById("weekly");
+
+  // Local timezone offset in hours
+  const timezoneOffset = new Date().getTimezoneOffset() / 60;
+
+  let adjustedEventCounts = utcEventCounts.map((event) => {
+    let localHour = event.hour - timezoneOffset; // Adjust hour based on local timezone
+    let localDay = event.day;
+
+    // Handle day and hour adjustments
+    if (localHour < 0) {
+      localHour += 24;
+      localDay = (localDay - 1 + 7) % 7; // Adjust day if hour goes into previous day
+    } else if (localHour >= 24) {
+      localHour -= 24;
+      localDay = (localDay + 1) % 7; // Adjust day if hour goes into next day
+    }
+
+    return { ...event, day: localDay, hour: Math.floor(localHour) };
+  });
+
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  let heatmapHTML = "";
+
+  for (let localDayIndex = 0; localDayIndex < 7; localDayIndex++) {
+    heatmapHTML += `<div class="day-row"><div class="day-name">${days[localDayIndex]}</div>`;
+
+    // Loop through each local hour of the day
+    for (let localHour = 0; localHour < 24; localHour++) {
+      const event = adjustedEventCounts.find(
+        (e) => e.day === localDayIndex && e.hour === localHour
+      );
+      const eventCount = event ? event.count : 0;
+
+      // Set the cell color based on event count
+      const backgroundColor =
+        eventCount > 0
+          ? `rgba(255, 79, 51, ${Math.min(eventCount / 100, 1)})`
+          : "#222";
+
+      // Add this hour's cell to the day's row
+      heatmapHTML += `<div class="hour-cell" style="background-color: ${backgroundColor};" title="${days[localDayIndex]} ${localHour}:00 - ${eventCount} events"></div>`;
+    }
+
+    heatmapHTML += `</div>`;
+  }
+
+  heatmapDiv.innerHTML = heatmapHTML;
+}
+
+let world;
+
+async function renderGlobe() {
+  const response = await fetch("/sessions/map");
+  const coordinates = await response.json();
+  const globeDiv = document.getElementById("globe");
+  const globeLeaderboardDiv = document.getElementById("globeleaderboard");
+
+  const top10 = coordinates.sort((a, b) => b.size - a.size).slice(0, 12);
+  globeLeaderboardDiv.innerHTML = `
+                    ${top10
+                      .map((location) => {
+                        return `<div class="city">${location.city}</div>`;
+                      })
+                      .join("")}`;
+
+  if (!world) {
+    world = Globe()
+      .width(600)
+      .backgroundColor("#111")
+      .atmosphereColor("#999")
+      .enablePointerInteraction(false)
+      .globeImageUrl("third-party/earth-dark.jpg")
+      .pointAltitude("size")
+      .pointColor("color")(globeDiv);
+
+    world.controls().autoRotate = true;
+    world.controls().autoRotateSpeed = 1;
+  }
+
+  world.pointsData(coordinates);
+}
+
+// Fetch and render all analytics
 async function fetchAndRenderAnalytics() {
   try {
     await Promise.all([
       renderHeader(),
+      renderPercentageChanges(),
       renderSessions(),
       renderSummary(),
       renderHourlySummary(),
       renderUrls(),
+      // renderBrowsers(),
+      renderReferrers(),
+      renderWeeklyHeatmap(),
+      renderGlobe(),
     ]);
   } catch (error) {
     console.error("Error fetching analytics:", error);
   }
 }
 
-// SETUP
+// Initial render
 fetchAndRenderAnalytics();
 
 function refreshAnalytics() {
   if (!document.hidden) {
     fetchAndRenderAnalytics();
 
-    // set a class on #live for 3 seconds
+    // This just indicates that the page is refreshing
     const live = document.getElementById("live");
     live.style.backgroundColor = "red";
     setTimeout(() => {
       live.style.backgroundColor = "#e2e2e2";
       live.classList.remove("fresh");
-    }, 1000);
+    }, 9000);
   }
 }
 
-// Refresh analytics every 5 seconds and when user comes back to the page
-setInterval(refreshAnalytics, 5000);
+// Rerender every 10 seconds
+setInterval(refreshAnalytics, 10_000);
 document.addEventListener("visibilitychange", refreshAnalytics);

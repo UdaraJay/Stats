@@ -1,0 +1,31 @@
+### A documentation file for the API 
+
+### Record an event with a name and a URL
+http://localhost:5775/collect?collector_id=String&name=String&url=String
+
+### List last 100 events
+GET http://localhost:5775/events HTTP/1.1
+
+### Data for plotting event frequency on map
+GET http://localhost:5775/sessions/map HTTP/1.1 
+
+### Summarized events
+GET http://localhost:5775/summary HTTP/1.1
+
+### Summarized Hourly
+GET http://localhost:5775/summary/hourly HTTP/1.1  
+
+### Summarized 5-minute resolution data
+GET http://localhost:5775/summary/fiveminutes HTTP/1.1  
+
+### Summarized browsers
+GET http://localhost:5775/summary/browsers HTTP/1.1  
+
+### Summarized referrers
+GET http://localhost:5775/summary/referrers HTTP/1.1    
+
+### Summarized percentages 
+GET http://localhost:5775/summary/percentages HTTP/1.1    
+
+### Embeddable stats.js for collecting analytics
+GET http://localhost:5775/stats.js HTTP/1.1  

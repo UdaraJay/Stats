@@ -9,37 +9,48 @@ pub struct Config {
     pub database_url: String,
     pub cors_domains: Vec<String>,
     pub processing_batch_size: usize,
+    pub is_development: bool,
 }
 
+// TODO: potentially replace this with arctix settings later
 impl Config {
     pub fn new() -> Self {
         dotenv().ok();
 
-        let processing_batch_size = env::var("PROCESSING_BATCH_SIZE")
-            .unwrap_or_else(|_| "4".to_string())
-            .parse::<usize>()
-            .expect("Failed to set memory limit");
+        Config {
+            app_url: Self::get_env("APP_URL", "127.0.0.1:8080"),
+            service_port: Self::get_env("SERVICE_PORT", "5775"),
+            database_url: Self::get_env("DATABASE_URL", "/data/stats.sqlite"),
+            cors_domains: Self::get_env_list("CORS_DOMAINS", ""),
+            processing_batch_size: Self::get_env_usize("PROCESSING_BATCH_SIZE", 4),
+            is_development: Self::get_env_bool("IS_DEVELOPMENT", false),
+        }
+    }
 
-        let app_url = env::var("APP_URL").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
+    fn get_env(key: &str, default: &str) -> String {
+        env::var(key).unwrap_or_else(|_| default.to_string())
+    }
 
-        let service_port = env::var("SERVICE_PORT").unwrap_or_else(|_| "5775".to_string());
-
-        let database_url =
-            env::var("DATABASE_URL").unwrap_or_else(|_| "/data/stats.sqlite".to_string());
-
-        let cors_domains = env::var("CORS_DOMAINS")
-            .unwrap_or_else(|_| "".to_string())
+    fn get_env_list(key: &str, default: &str) -> Vec<String> {
+        env::var(key)
+            .unwrap_or_else(|_| default.to_string())
             .split(',')
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
-            .collect();
+            .collect()
+    }
 
-        Config {
-            app_url,
-            service_port,
-            database_url,
-            cors_domains,
-            processing_batch_size,
-        }
+    fn get_env_usize(key: &str, default: usize) -> usize {
+        env::var(key)
+            .unwrap_or_else(|_| default.to_string())
+            .parse()
+            .expect(&format!("Failed to parse {}", key))
+    }
+
+    fn get_env_bool(key: &str, default: bool) -> bool {
+        env::var(key)
+            .unwrap_or_else(|_| default.to_string())
+            .parse()
+            .expect(&format!("Failed to parse {}", key))
     }
 }

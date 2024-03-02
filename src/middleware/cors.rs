@@ -7,11 +7,10 @@ pub fn setup_cors(cors_domains: &Vec<String>) -> Cors {
     let allowed_domains_set: HashSet<String> = cors_domains.iter().cloned().collect();
 
     Cors::default()
-        .allowed_origin_fn(move |origin, _req_head| {
-            if let Ok(origin_str) = origin.to_str() {
-                allowed_domains_set.contains(origin_str)
-            } else {
-                warn!("CORS blocked: {:?}", origin);
+        .allowed_origin_fn(move |origin, _req_head| match origin.to_str() {
+            Ok(origin_str) => allowed_domains_set.contains(origin_str),
+            Err(_) => {
+                warn!("CORS blocked: Missing or invalid origin");
                 false
             }
         })

@@ -39,19 +39,19 @@
         </div>
         <div class="primary">
           <div class="primaryMetric">
-            <div class="number" id="sessionsInLastTwentyFourHours"></div>
+            <div class="number" id="sessions_in_last_twenty_four_hours">0</div>
             <div class="label">sessions / 24 hours</div>
           </div>
           <div class="primaryMetric">
-            <div class="number" id="eventsInLastTwentyFourHours">8038</div>
+            <div class="number" id="events_in_last_twenty_four_hours">0</div>
             <div class="label">events / 24 hours</div>
           </div>
           <div class="primaryMetric">
-            <div class="number" id="eventsInLastHour">123</div>
+            <div class="number" id="events_in_last_hour">0</div>
             <div class="label">events / 1 hours</div>
           </div>
           <div class="primaryMetric">
-            <div class="number" id="eventsInLastFiveMinutes">3</div>
+            <div class="number" id="events_in_last_five_minutes">0</div>
             <div class="label">events / 5 minutes</div>
           </div>
         </div>
@@ -65,21 +65,49 @@
     </div>
     <div id="content">
       <div id="header">
-        <b>Stats Analytics</b> –
-        <span id="headerTime"></span>
+        <div class="left">
+          <b>Stats Analytics</b> –
+          <span id="headerTime"></span>
+        </div>
+        <div class="right">
+          <div class="item">Day <span class="number" id="pDay"></span></div>
+          <div class="item">Week <span class="number" id="pWeek"></span></div>
+          <div class="item">Month <span class="number" id="pMonth"></span></div>
+        </div>
       </div>
-      <div id="hourly"></div>
-      <div id="urls"></div>
+
+      <div id="charts">
+        <div id="hourly"></div>
+        <div id="weekly"></div>
+      </div>
+
+      <div class="overview">
+        <div id="urls"></div>
+        <!-- <div id="browsers"></div> -->
+        <div id="referrers"></div>
+        <div class="globecontainer">
+          <div class="content">
+            <div class="top">
+              <div class="left">Top locations</div>
+              <div class="right">Last 7 days</div>
+            </div>
+            <div id="globeleaderboard"></div>
+          </div>
+          <div id="globe"></div>
+        </div>
+      </div>
+
       <div id="sessions"></div>
     </div>
 
+    <script src="third-party/globegl.js"></script>
     <script src="script.js"></script>
-
     <script>
       // Stats analytics
       var head = document.head || document.getElementsByTagName("head")[0];
       var script = document.createElement("script");
-      script.setAttribute("src", "https://stats.udara.io/stats.js");
+      // script.setAttribute("src", "http://localhost:5775/stats.js");
+      // script.setAttribute("src", "https://stats.udara.io/stats.js");
       script.setAttribute("onload", () => window.stats_collect());
       script.setAttribute("type", "text/javascript");
       script.setAttribute("charset", "utf8");

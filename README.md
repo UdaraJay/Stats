@@ -4,7 +4,7 @@ Stats is a high-performance, standalone analytics provider designed for self-hos
 
 **`Current status: it works, but it's not finished.`**
 
-![Stats dashboard on iPad](./preview.jpeg)
+![Stats dashboard on iPad](./preview.png)
 
 ### Key-features
 - Real-time analytics and dashboard
@@ -49,19 +49,16 @@ When you add this script to a new domain, you must add them to the `CORS_DOMAINS
 
 ## Setup
 
-Minimum set of files required to run this application.
+Minimum set of folders & files required to run this application.
 
 ```
 stats/
 ├── data/
 │ ├── GeoLite2-City.mmdb
-│ └── stats.sqlite
-├── src/
-│ └── frontend
-│   ├── index.html
-│   ├── script.js
-│   └── styles.css
-├── stats // executable from target/release/stats
+│ ├── cities5000.txt 
+│ └── stats.sqlite 
+├── ui/
+├── stats // copy executable from target/release/stats
 └── .env
 ```
 
@@ -75,6 +72,6 @@ These options must be defined in a `.env` file before starting the server.
 |  SERVICE_PORT | 5775  | Port you want the service to be hosted from  |
 |  DATABASE_URL | /data/stats.sqlite  | Path to .sqlite file to use as database.  |
 |  CORS_DOMAINS | http://localhost:5775,https://udara.io  | Comma-separated list of allowed domains. The service will only accept analytics events from these domains.   |
-|  PROCESSING_BATCH_SIZE | 5  | Max limit for events buffer used to queue and batch analytics events for processing. When the limit is hit, new events are dropped until items are processed from the queue. |
+|  PROCESSING_BATCH_SIZE | 500  | Max limit for events buffer used to queue and batch analytics events for processing. When the limit is hit, new events are dropped until items are processed from the queue. |
 
 

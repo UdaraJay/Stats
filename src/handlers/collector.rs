@@ -6,9 +6,9 @@ use actix_web::{http, web, HttpRequest, HttpResponse, Responder};
 use chrono::Utc;
 use diesel::prelude::*;
 use diesel::result::Error;
-use log::warn;
 use std::sync::Arc;
 use ulid::Ulid;
+use woothee::parser::Parser;
 
 fn generate_analytics_js(cid: &str, app_url: &str) -> String {
     format!(
@@ -18,23 +18,6 @@ fn generate_analytics_js(cid: &str, app_url: &str) -> String {
     var appUrl = "{}";
 
     function init() {{
-        // check api to see if collector is expired
-        // if expired, get a new collector id
-        // if not expired, continue with the current collector id
-        // function checkCollectorStatus() {{
-        //     var url = new URL(appUrl + "/collectors/" + collectorId);
-        //     fetch(url)
-        //     .then(res => res.json())
-        //     .then(data => {{
-        //         console.log("📼", "collector refreshed");
-        //     }})
-        //     .catch(rejected => {{
-        //         console.log("📼", "failed to check collector status, continuing with existing collector.");
-        //     }});
-        // }}
-
-        // checkCollectorStatus();
-
         document.addEventListener('click', function(event) {{
             if (event.target.tagName === 'A') {{
                 var target = event.target.getAttribute('target');
@@ -70,12 +53,13 @@ fn generate_analytics_js(cid: &str, app_url: &str) -> String {
         }});
     }}
 
-    async function send(type = "pageview", url_override = null) {{
+    async function send(type = "pageview", url_override = null, referrer = document.referrer) {{
         var url = new URL(appUrl + "/collect");
 
         url.searchParams.set('collector_id', collectorId);
         url.searchParams.set('name', type);
         url.searchParams.set('url', url_override || window.location.href);
+        url.searchParams.set('referrer', referrer);
 
         fetch(url)
         .then(res => res.json())
@@ -108,6 +92,8 @@ fn create_collector(
     origin_str: &str,
     lookup_country: &str,
     lookup_city: &str,
+    os_option: Option<String>,
+    browser_option: Option<String>,
 ) -> Result<String, Error> {
     use crate::schema::collectors::dsl::*;
 
@@ -118,15 +104,15 @@ fn create_collector(
         origin: origin_str.to_string(),
         country: lookup_country.to_string(),
         city: lookup_city.to_string(),
+        os: os_option,
+        browser: browser_option,
         timestamp: Utc::now().naive_utc(),
     };
 
-    // Execute the insertion query
     diesel::insert_into(collectors)
         .values(&new_collector)
         .execute(&mut conn)?;
 
-    // Return the ID of the newly inserted collector
     Ok(new_collector.id)
 }
 
@@ -136,33 +122,47 @@ pub async fn serve_collector_js(
     pool: web::Data<DbPool>,
 ) -> impl Responder {
     let origin = req.headers().get("Origin").map_or_else(
-        || "unknown".to_string(),
-        |v| v.to_str().unwrap_or("unknown").to_string(),
+        || "unknown".to_owned(),
+        |v| v.to_str().unwrap_or("unknown").to_owned(),
     );
 
-    // Perform GeoIP lookup, you can get this database for free at https://maxmind.com
-    // Place it in the /data folder for this to work.
     let db_path = "data/GeoLite2-City.mmdb";
-
     let real_ip = req
         .headers()
         .get("X-Forwarded-For")
         .and_then(|v| v.to_str().ok());
-    let ip: &str = match real_ip {
-        Some(s) => s,
-        None => "0.0.0.0",
-    };
+    let ip: &str = real_ip.unwrap_or("0.0.0.0");
+
+    let mut os: Option<String> = None;
+    let mut browser: Option<String> = None;
+
+    if let Some(user_agent_string) = req.headers().get("User-Agent") {
+        if let Ok(ua_string) = user_agent_string.to_str() {
+            let parser = Parser::new();
+            let result = parser.parse(ua_string);
+            if let Some(ref parsed_result) = result {
+                os = Some(parsed_result.os.to_string());
+                browser = Some(parsed_result.name.to_string());
+            }
+        }
+    }
 
     let (lookup_country, lookup_city) = match geoip_lookup(ip, db_path) {
-        Ok((_country, _city)) => (_country, _city),
-        Err(e) => {
-            warn!("Error during GeoIP lookup: {}", e);
-            ("Unknown".to_string(), "Unknown".to_string())
-        }
+        Ok((_country, _city)) => (_country.to_owned(), _city.to_owned()),
+        Err(_) => ("Unknown".to_owned(), "Unknown".to_owned()),
     };
 
-    let collector_result =
-        web::block(move || create_collector(&pool, &origin, &lookup_country, &lookup_city)).await;
+    let collector_result = web::block(move || {
+        create_collector(
+            &pool,
+            &origin,
+            &lookup_country,
+            &lookup_city,
+            os.clone(),
+            browser.clone(),
+        )
+    })
+    .await;
 
     match collector_result {
         Ok(collector_id) => match collector_id {

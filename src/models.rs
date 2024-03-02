@@ -10,6 +10,8 @@ pub struct Collector {
     pub origin: String,
     pub country: String,
     pub city: String,
+    pub os: Option<String>,
+    pub browser: Option<String>,
     pub timestamp: NaiveDateTime,
 }
 
@@ -19,6 +21,7 @@ pub struct Collector {
 pub struct Event {
     pub id: String,
     pub url: String,
+    pub referrer: Option<String>,
     pub name: String,
     pub timestamp: NaiveDateTime,
     pub collector_id: String,
@@ -36,6 +39,7 @@ pub struct EventRequest {
 pub struct NewEvent {
     pub id: String,
     pub url: String,
+    pub referrer: Option<String>,
     pub name: String,
     pub timestamp: NaiveDateTime,
     pub collector_id: String,

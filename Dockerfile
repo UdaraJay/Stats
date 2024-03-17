@@ -47,8 +47,8 @@ COPY migrations/ /app/migrations
 COPY ui/ /app/ui
 COPY --from=diesel-builder /app/bin/diesel /app
 COPY --from=builder /app/target/release/stats /app
-COPY --chmod=0755 docker-entrypoint.sh /app
 
 ENV PATH="/app:${PATH}"
+EXPOSE ${SERVICE_PORT}
 
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
+CMD diesel migration run && stats

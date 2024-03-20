@@ -1,7 +1,10 @@
 ### A documentation file for the API 
 
 ### Record an event with a name and a URL
-http://localhost:5775/collect?collector_id=String&name=String&url=String
+GET http://localhost:5775/collect?collector_id=String&name=String&url=String
+
+### Create a collector
+POST http://localhost:5775/create-collector
 
 ### List last 100 events
 GET http://localhost:5775/events HTTP/1.1

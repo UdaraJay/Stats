@@ -2,6 +2,7 @@ use crate::config::Config;
 use crate::db::DbPool;
 use crate::models::Collector;
 use crate::utils::geoip::geoip_lookup;
+use actix_web::error::BlockingError;
 use actix_web::{http, web, HttpRequest, HttpResponse, Responder};
 use chrono::Utc;
 use diesel::prelude::*;
@@ -116,11 +117,10 @@ fn create_collector(
     Ok(new_collector.id)
 }
 
-pub async fn serve_collector_js(
+async fn create_collector_from_request(
     req: HttpRequest,
-    config: web::Data<Arc<Config>>,
     pool: web::Data<DbPool>,
-) -> impl Responder {
+) -> Result<Result<String, Error>, BlockingError> {
     let origin = req.headers().get("Origin").map_or_else(
         || "unknown".to_owned(),
         |v| v.to_str().unwrap_or("unknown").to_owned(),
@@ -152,7 +152,7 @@ pub async fn serve_collector_js(
         Err(_) => ("Unknown".to_owned(), "Unknown".to_owned()),
     };
 
-    let collector_result = web::block(move || {
+    web::block(move || {
         create_collector(
             &pool,
             &origin,
@@ -162,7 +162,15 @@ pub async fn serve_collector_js(
             browser.clone(),
         )
     })
-    .await;
+    .await
+}
+
+pub async fn serve_collector_js(
+    req: HttpRequest,
+    config: web::Data<Arc<Config>>,
+    pool: web::Data<DbPool>,
+) -> impl Responder {
+    let collector_result = create_collector_from_request(req, pool).await;
 
     match collector_result {
         Ok(collector_id) => match collector_id {
@@ -180,6 +188,24 @@ pub async fn serve_collector_js(
         },
         Err(e) => {
             eprintln!("Error serving collector JS: {}", e);
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
+
+pub async fn post_collector(req: HttpRequest, pool: web::Data<DbPool>) -> impl Responder {
+    let collector_result = create_collector_from_request(req, pool).await;
+
+    match collector_result {
+        Ok(collector_id) => match collector_id {
+            Ok(id) => HttpResponse::Ok().json(id),
+            Err(e) => {
+                eprintln!("Error creating collector: {}", e);
+                HttpResponse::InternalServerError().finish()
+            }
+        },
+        Err(e) => {
+            eprintln!("Error creating collector: {}", e);
             HttpResponse::InternalServerError().finish()
         }
     }

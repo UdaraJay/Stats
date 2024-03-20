@@ -66,6 +66,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(pool.clone()))
             .app_data(web::Data::new(events_queue.clone()))
             .route("/collect", web::get().to(events::record_event))
+            .route("/create-collector", web::post().to(collector::post_collector))
             .route("/sessions", web::get().to(sessions::retrieve_sessions))
             .route("/sessions/map", web::get().to(sessions::map))
             .route("/summary", web::get().to(summary::events))

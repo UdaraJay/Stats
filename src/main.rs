@@ -39,7 +39,7 @@ async fn main() -> std::io::Result<()> {
     env_logger::init();
 
     let config = Arc::new(Config::new());
-    let address = format!("127.0.0.1:{}", config.service_port);
+    let address = format!("0.0.0.0:{}", config.service_port);
     let pool = establish_connection_pool();
 
     info!("Stats analytics");

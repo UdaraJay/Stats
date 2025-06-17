@@ -1,364 +1,375 @@
+function dom(tag, attrs = {}, ...children) {
+  const el = document.createElement(tag);
+
+  const isDangerousAttr = (name) =>
+    /^on/i.test(name) || name === "srcdoc" || name === "innerHTML";
+
+  for (const [k, v] of Object.entries(attrs)) {
+    if (isDangerousAttr(k)) continue;
+
+    if (k === "class") {
+      el.className = v;
+    } else if (k === "style" && v && typeof v === "object") {
+      for (const [prop, val] of Object.entries(v)) {
+        const str = String(val);
+        if (/url\s*\(\s*javascript:/i.test(str)) continue;
+        if (/^\d+px$/.test(str) && +str.slice(0, -2) > 10_000) continue;
+        el.style[prop] = str;
+      }
+    } else if (k === "dataset" && v && typeof v === "object") {
+      for (const [dk, dv] of Object.entries(v)) {
+        if (/^[\w-]+$/.test(dk)) el.dataset[dk] = dv;
+      }
+    } else {
+      el.setAttribute(k, v);
+    }
+  }
+
+  // children / text
+  for (const child of children) {
+    el.append(child instanceof Node ? child : document.createTextNode(child));
+  }
+  return el;
+}
+
 function formatFromNow(timestamp) {
   const now = new Date();
-  // Stats timestamps always in UTC, so we need to append a "Z" to indicate
-  // this when parsing into local timezone here.
-  const sessionDate = new Date(timestamp.replace(" ", "T") + "Z");
-  const diffInSeconds = Math.floor((now - sessionDate) / 1000);
+  const date = new Date(timestamp.replace(" ", "T") + "Z");
+  const diff = Math.floor((now - date) / 1000);
   const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 
-  if (Math.abs(diffInSeconds) < 60) {
-    return rtf.format(-diffInSeconds, "second");
-  } else if (Math.abs(diffInSeconds) < 3600) {
-    return rtf.format(-Math.floor(diffInSeconds / 60), "minute");
-  } else if (Math.abs(diffInSeconds) < 86400) {
-    return rtf.format(-Math.floor(diffInSeconds / 3600), "hour");
-  } else {
-    return rtf.format(-Math.floor(diffInSeconds / 86400), "day");
-  }
+  if (Math.abs(diff) < 60) return rtf.format(-diff, "second");
+  if (Math.abs(diff) < 3600) return rtf.format(-(diff / 60) | 0, "minute");
+  if (Math.abs(diff) < 86400) return rtf.format(-(diff / 3600) | 0, "hour");
+  return rtf.format(-(diff / 86400) | 0, "day");
+}
+
+function prettyPrintTimeDifference(t1, t2) {
+  const d1 = new Date(t1),
+    d2 = new Date(t2);
+  if (isNaN(d1) || isNaN(d2)) return ["00", "00", "00"];
+  const s = (Math.abs(d2 - d1) / 1000) | 0;
+  const hh = (s / 3600) | 0;
+  const mm = ((s % 3600) / 60) | 0;
+  const ss = s % 60;
+  return [hh, mm, ss].map((n) => String(n).padStart(2, "0"));
 }
 
 function mapHourlyEventsToLocalTime(events) {
-  // Get the current time in the user's local timezone
   const now = new Date();
-  let startOfCustomDay = new Date(now);
-  // Start at 12am
-  startOfCustomDay.setHours(0, 0, 0, 0);
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
 
-  // Create an array to represent each hour of the custom 24-hour day
-  // and map our timezone-adjusted hours to it
-  let customDayHours = new Array(24).fill().map((_, index) => {
-    const hourDate = new Date(startOfCustomDay.getTime() + index * 3600 * 1000);
-    let hours = hourDate.getHours();
-    const ampm = hours >= 12 ? "PM" : "AM";
-    hours = hours % 12;
-    hours = hours ? hours : 12; // the hour '0' should be '12'
-    const formattedHour = hours + ampm;
+  const hours = Array.from({ length: 24 }, (_, i) => {
+    const hDate = new Date(start.getTime() + i * 3600 * 1000);
+    let h = hDate.getHours();
+    const ampm = h >= 12 ? "PM" : "AM";
+    h = h % 12 || 12;
     return {
-      formattedHour: formattedHour,
-      hour: hourDate.getHours(),
-      date: hourDate.toISOString().slice(0, 10), // YYYY-MM-DD
+      formattedHour: `${h}${ampm}`,
+      hour: hDate.getHours(),
+      date: hDate.toISOString().slice(0, 10),
       count: 0,
       isCurrent:
-        now.getHours() === hourDate.getHours() &&
-        now.getDate() === hourDate.getDate(),
+        now.getHours() === hDate.getHours() &&
+        now.getDate() === hDate.getDate(),
     };
   });
 
-  // Translate UTC event times to local timezone and assign counts
-  events.forEach((event) => {
-    // Assumes input is in ISO format and thus interprets as UTC
-    const eventDateUTC = new Date(event.hour + "Z");
-
-    // Convert eventDateUTC to local time
-    const eventDateLocal = new Date(
-      eventDateUTC.getTime() +
-        eventDateUTC.getTimezoneOffset() * 60000 +
+  events.forEach((e) => {
+    const utc = new Date(e.hour + "Z");
+    const loc = new Date(
+      utc.getTime() +
+        utc.getTimezoneOffset() * 60000 +
         now.getTimezoneOffset() * -60000
     );
+    const idx = hours.findIndex(
+      (h) =>
+        h.date === loc.toISOString().slice(0, 10) && h.hour === loc.getHours()
+    );
+    if (idx !== -1) hours[idx].count += Number(e.count) || 0;
+  });
 
-    // Find the matching hour in customDayHours to update the count
-    const matchingHourIndex = customDayHours.findIndex(
-      (hour) =>
-        hour.date === eventDateLocal.toISOString().slice(0, 10) &&
-        hour.hour === eventDateLocal.getHours()
+  return hours;
+}
+
+function buildTableCard(titleLeft, titleRight, rows) {
+  return dom(
+    "div",
+    { class: "tablecard" },
+    dom(
+      "div",
+      { class: "top" },
+      dom("div", { class: "left" }, titleLeft),
+      dom("div", { class: "right" }, titleRight)
+    ),
+    ...rows
+  );
+}
+
+/* --------------------------------------------------------------------------
+   Hourly bar chart
+   -------------------------------------------------------------------------- */
+async function renderHourlySummary() {
+  const data = await fetch("/summary/hourly").then((r) => r.json());
+  const hours = mapHourlyEventsToLocalTime(data);
+  const max = Math.max(...hours.map((h) => h.count));
+  const scale = max ? 150 / max : 0;
+  let pastCurrent = false;
+
+  const chart = dom("div", { class: "hourly" });
+
+  hours.forEach((h) => {
+    const safeCount = Number.isFinite(h.count) ? h.count : 0;
+
+    const barFill = dom("div", {
+      class: "bar-fill",
+      style: { height: `${(safeCount * scale) | 0}px` },
+    });
+
+    const bar = dom(
+      "div",
+      {
+        class: `bar ${pastCurrent ? "future" : ""}`,
+        style: { height: "150px" },
+      },
+      barFill
     );
 
-    if (matchingHourIndex !== -1) {
-      customDayHours[matchingHourIndex].count += event.count;
-    }
+    if (h.isCurrent) pastCurrent = true;
+
+    chart.append(
+      dom(
+        "div",
+        { class: "col" },
+        bar,
+        dom(
+          "div",
+          { class: `hour ${h.isCurrent ? "current" : ""}` },
+          h.formattedHour
+        )
+      )
+    );
   });
 
-  return customDayHours;
+  document.getElementById("hourly").replaceChildren(chart);
 }
 
-async function renderHourlySummary() {
-  const response = await fetch("/summary/hourly");
-  const hourlyEvents = await response.json();
-  const hourlyDiv = document.getElementById("hourly");
-  const localEvents = mapHourlyEventsToLocalTime(hourlyEvents);
-  const maxCount = Math.max(...localEvents.map((event) => event.count));
-  const scaleFactor = 150 / maxCount;
-  let pastCurrentHour = false;
-
-  hourlyDiv.innerHTML = `
-                  <div class="hourly">
-                      ${localEvents
-                        .map((hour) => {
-                          const barHeight = hour.count * scaleFactor;
-
-                          if (hour.isCurrent) {
-                            pastCurrentHour = true;
-                          }
-
-                          return `<div class="col">
-                                      <div class="bar ${
-                                        pastCurrentHour && "future"
-                                      }" style="height: 150px;">
-                                          <div class="bar-fill" style="height: ${barHeight}px;"></div>
-                                      </div>
-                                      <div class="hour ${
-                                        hour.isCurrent && "current"
-                                      }">${hour.formattedHour}</div>
-                                  </div>`;
-                        })
-                        .join("")}
-                  </div>
-              `;
-}
-
+/* --------------------------------------------------------------------------
+   Top paths
+   -------------------------------------------------------------------------- */
 async function renderUrls() {
-  const response = await fetch("/summary/urls");
-  const urls = await response.json();
-  const urlsDiv = document.getElementById("urls");
+  const urls = await fetch("/summary/urls").then((r) => r.json());
 
-  urlsDiv.innerHTML = `
-                <div class="tablecard">
-                <div class="top">
-                  <div class="left">Top paths</div>
-                  <div class="right">Last 7 days</div>
-                </div>
-                    ${urls
-                      .map((url) => {
-                        // parse url into host and path
-                        let host, path;
+  const rows = urls.map(({ url, count }) => {
+    let host = "",
+      path = url;
+    try {
+      const u = new URL(url);
+      host = u.host;
+      path = u.pathname + u.search;
+    } catch {
+      /* fallback */
+    }
 
-                        try {
-                          const urlObj = new URL(url.url);
-                          host = urlObj.host;
-                          path = urlObj.pathname + urlObj.search;
-                        } catch (err) {
-                          host = "";
-                          path = url.url;
-                        }
+    return dom(
+      "div",
+      { class: "item" },
+      dom(
+        "div",
+        { class: "left" },
+        dom("div", { class: "time" }, String(count))
+      ),
+      dom(
+        "div",
+        { class: "right" },
+        dom("div", { class: "host" }, host),
+        dom("div", { class: "path" }, path)
+      )
+    );
+  });
 
-                        return `<div class="item">
-
-                        <div class="left">
-                        <div class="time">${url.count}</div>
-                        </div>
-                        <div class="right">
-                            <div class="host">${host}</div>
-                            <div class="path">${path}</div>
-                        </div>
-                      </div>
-                              `;
-                      })
-                      .join("")}
-
-
-                </div>
-            `;
+  document
+    .getElementById("urls")
+    .replaceChildren(buildTableCard("Top paths", "Last 7 days", rows));
 }
 
+/* --------------------------------------------------------------------------
+   Top browsers
+   -------------------------------------------------------------------------- */
 async function renderBrowsers() {
-  const response = await fetch("/summary/osbrowsers");
-  const urls = await response.json();
-  const urlsDiv = document.getElementById("browsers");
+  const container = document.getElementById("browsers");
+  if (!container) return;
 
-  urlsDiv.innerHTML = `
-                <div class="tablecard">
-                <div class="top">
-                  <div class="left">Top browsers</div>
-                  <div class="right">Last 7 days</div>
-                </div>
-                    ${urls
-                      .map((url) => {
-                        return `<div class="item">
-                          <div class="left">
-                          <div class="time">${url.count}</div>
-                          </div>
-                          <div class="right">
-                              <div class="host">${url.os}</div>
-                              <div class="path">${url.browser}</div>
-                          </div>
-                        </div>
-                                `;
-                      })
-                      .join("")}
+  const list = await fetch("/summary/osbrowsers").then((r) => r.json());
 
+  const rows = list.map(({ os, browser, count }) =>
+    dom(
+      "div",
+      { class: "item" },
+      dom(
+        "div",
+        { class: "left" },
+        dom("div", { class: "time" }, String(count))
+      ),
+      dom(
+        "div",
+        { class: "right" },
+        dom("div", { class: "host" }, os),
+        dom("div", { class: "path" }, browser)
+      )
+    )
+  );
 
-                </div>
-            `;
+  container.replaceChildren(
+    buildTableCard("Top browsers", "Last 7 days", rows)
+  );
 }
 
+/* --------------------------------------------------------------------------
+   Top referrers
+   -------------------------------------------------------------------------- */
 async function renderReferrers() {
-  const response = await fetch("/summary/referrers");
-  const urls = await response.json();
-  const urlsDiv = document.getElementById("referrers");
+  const refs = await fetch("/summary/referrers").then((r) => r.json());
 
-  urlsDiv.innerHTML = `
-                <div class="tablecard">
-                <div class="top">
-                  <div class="left">Top referrers</div>
-                  <div class="right">Last 7 days</div>
-                </div>
-                    ${urls
-                      .map((url) => {
-                        return `<div class="item">
-                          <div class="left">
-                          <div class="time">${url.count}</div>
-                          </div>
-                          <div class="right">
-                              <div class="host">${url.domain.replace(
-                                /\/$/,
-                                ""
-                              )}</div>
-                          </div>
-                        </div>
-                                `;
-                      })
-                      .join("")}
+  const rows = refs.map(({ domain, count }) =>
+    dom(
+      "div",
+      { class: "item" },
+      dom(
+        "div",
+        { class: "left" },
+        dom("div", { class: "time" }, String(count))
+      ),
+      dom(
+        "div",
+        { class: "right" },
+        dom("div", { class: "host" }, domain.replace(/\/$/, ""))
+      )
+    )
+  );
 
-
-                </div>
-            `;
+  document
+    .getElementById("referrers")
+    .replaceChildren(buildTableCard("Top referrers", "Last 7 days", rows));
 }
 
-function prettyPrintTimeDifference(utcTimestamp1, utcTimestamp2) {
-  try {
-    // Parse the UTC timestamp strings to Date objects
-    const date1 = new Date(utcTimestamp1);
-    const date2 = new Date(utcTimestamp2);
-
-    if (isNaN(date1.getTime()) || isNaN(date2.getTime())) {
-      return ["00", "00", "00"];
-    }
-
-    // Calculate the difference in milliseconds
-    const differenceInMilliseconds = Math.abs(date2 - date1);
-
-    // Convert to total seconds
-    const totalSeconds = Math.floor(differenceInMilliseconds / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-
-    // Format as HH:MM:SS
-    const formatted = [
-      hours.toString().padStart(2, "0"),
-      minutes.toString().padStart(2, "0"),
-      seconds.toString().padStart(2, "0"),
-    ];
-
-    return formatted;
-  } catch (error) {
-    return ["00", "00", "00"];
-  }
-}
-
+/* --------------------------------------------------------------------------
+   Sessions list
+   -------------------------------------------------------------------------- */
 async function renderSessions() {
-  const response = await fetch("/sessions");
-  const sessions = await response.json();
-  const sessionsDiv = document.getElementById("sessions");
+  const sessions = await fetch("/sessions").then((r) => r.json());
+  const wrap = dom("div", { class: "sessions" });
 
-  sessionsDiv.innerHTML = `
-    <div class="sessions">
-      ${sessions
-        .map((session) => {
-          const duration = prettyPrintTimeDifference(
-            session.events[0]?.timestamp,
-            session.events[session.events.length - 1]?.timestamp
-          );
+  sessions.forEach((sess) => {
+    const dur = prettyPrintTimeDifference(
+      sess.events[0]?.timestamp,
+      sess.events[sess.events.length - 1]?.timestamp
+    );
 
-          return `<div class="session">
-              <div class="top">
-                <div class="left">
-                ${session.events?.length} event${
-            session.events?.length !== 1 ? "s" : ""
-          } → from ${session.collector.city}, ${session.collector.country}
-                </div>
-                <div class="right">
-                  <div class="duration">
-                    <div class="item">${duration[0]}<b>H</b></div>
-                    <div class="item">${duration[1]}<b>M</b></div>
-                    <div class="item">${duration[2]}<b>S</b></div>
-                  </div>
-                </div>
-              </div>
-           
-        <div class="events">
-            ${session.events
-              // .reverse()
-              .map((event) => {
-                let host, path;
+    const header = dom(
+      "div",
+      { class: "top" },
+      dom(
+        "div",
+        { class: "left" },
+        `${sess.events?.length} event${sess.events?.length !== 1 ? "s" : ""}` +
+          ` → from ${sess.collector.city}, ${sess.collector.country}`
+      ),
+      dom(
+        "div",
+        { class: "right" },
+        dom(
+          "div",
+          { class: "duration" },
+          ...dur.map((d, i) =>
+            dom("div", { class: "item" }, d, dom("b", {}, ["H", "M", "S"][i]))
+          )
+        )
+      )
+    );
 
-                try {
-                  const urlObj = new URL(event.url);
-                  host = urlObj.host;
-                  path = urlObj.pathname + urlObj.search;
-                } catch (err) {
-                  host = "";
-                  path = event.url;
-                }
+    const evList = dom(
+      "div",
+      { class: "events" },
+      ...sess.events.map((ev) => {
+        let host = "",
+          path = ev.url;
+        try {
+          const u = new URL(ev.url);
+          host = u.host;
+          path = u.pathname + u.search;
+        } catch {
+          /* fallback */
+        }
+        return dom(
+          "div",
+          { class: "event" },
+          dom(
+            "div",
+            { class: "left" },
+            dom("div", { class: "name" }, ev.name),
+            dom("div", { class: "host" }, host),
+            dom("div", { class: "path" }, path)
+          ),
+          dom(
+            "div",
+            { class: "right" },
+            dom("div", { class: "time" }, formatFromNow(ev.timestamp))
+          )
+        );
+      })
+    );
 
-                return `
-                <div class="event">
-                  <div class="left">
-                      <div class="name">${event.name}</div>
-                      <div class="host">${host}</div>
-                      <div class="path">${path}</div>
-                  </div>
-                  <div class="right">
-                      <div class="time">${formatFromNow(event.timestamp)}</div>
-                  </div>
-                </div>
-                `;
-              })
-              .join("")}
-          </div>
-      </div>
-          `;
-        })
-        .join("")}
+    wrap.append(dom("div", { class: "session" }, header, evList));
+  });
 
-
-                </div>
-            `;
+  document.getElementById("sessions").replaceChildren(wrap);
 }
 
+/* --------------------------------------------------------------------------
+   Summary numbers & percentage chips
+   -------------------------------------------------------------------------- */
 async function renderSummary() {
-  const summaryResponse = await fetch("/summary");
-  const summary = await summaryResponse.json();
-  Object.keys(summary).forEach((key) => {
-    const element = document.getElementById(key);
-    if (element) {
-      element.innerText = summary[key];
-    }
+  const sum = await fetch("/summary").then((r) => r.json());
+  Object.keys(sum).forEach((k) => {
+    const el = document.getElementById(k);
+    if (el) el.textContent = sum[k];
   });
 }
 
-const renderSinglePercentageChange = (element, percentage) => {
-  const ele = document.getElementById(element);
-  let text = "-";
-  if (percentage < 0) {
-    ele.classList.remove("pos");
-    ele.classList.add("neg");
-    text = `↓${Math.abs(Math.round(percentage * 10) / 10)}%`;
-  } else if (percentage > 0) {
-    ele.classList.remove("neg");
-    ele.classList.add("pos");
-    text = `↑${Math.round(percentage * 10) / 10}%`;
+function renderSinglePercentageChange(id, pct) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove("pos", "neg");
+
+  let txt = "-";
+  if (pct < 0) {
+    el.classList.add("neg");
+    txt = `↓${((Math.abs(pct) * 10) | 0) / 10}%`;
+  } else if (pct > 0) {
+    el.classList.add("pos");
+    txt = `↑${((pct * 10) | 0) / 10}%`;
   } else {
-    ele.classList.remove("pos");
-    ele.classList.remove("neg");
-    text = "0%";
+    txt = "0%";
   }
-  ele.innerText = text;
-};
+
+  el.textContent = txt;
+}
 
 async function renderPercentageChanges() {
-  const percentagesResponse = await fetch("/summary/percentages");
-  const percentages = await percentagesResponse.json();
-
-  renderSinglePercentageChange("pDay", percentages.day);
-  renderSinglePercentageChange("pWeek", percentages.week);
-  renderSinglePercentageChange("pMonth", percentages.month);
+  const p = await fetch("/summary/percentages").then((r) => r.json());
+  renderSinglePercentageChange("pDay", p.day);
+  renderSinglePercentageChange("pWeek", p.week);
+  renderSinglePercentageChange("pMonth", p.month);
 }
 
+/* --------------------------------------------------------------------------
+   Header clock
+   -------------------------------------------------------------------------- */
 async function renderHeader() {
-  const sessionsDiv = document.getElementById("headerTime");
   const now = new Date();
-  const options = {
+  const opts = {
     weekday: "long",
     year: "numeric",
     month: "long",
@@ -366,99 +377,90 @@ async function renderHeader() {
     hour: "numeric",
     minute: "numeric",
   };
-  const localeDateTime = now.toLocaleDateString("en-US", options);
-  sessionsDiv.innerText = localeDateTime;
+  document.getElementById("headerTime").textContent = now.toLocaleDateString(
+    "en-US",
+    opts
+  );
 }
 
 function convertUtcToLocal(utcDay, utcHour, offset) {
-  // Calculate new hour based on offset
   let localHour = utcHour - offset;
-
-  // Initialize local day as UTC day
   let localDay = utcDay;
-
-  // Adjust the local day and hour based on the new calculated hour
   if (localHour < 0) {
-    localHour += 24; // Adjust hour to local time
-    localDay = (localDay + 6) % 7; // Go to previous day
+    localHour += 24;
+    localDay = (localDay + 6) % 7;
   } else if (localHour >= 24) {
-    localHour -= 24; // Adjust hour to local time
-    localDay = (localDay + 1) % 7; // Go to next day
+    localHour -= 24;
+    localDay = (localDay + 1) % 7;
   }
-
   return { localDay, localHour };
 }
 
+/* --------------------------------------------------------------------------
+   Weekly heat-map
+   -------------------------------------------------------------------------- */
 async function renderWeeklyHeatmap() {
-  const response = await fetch("/summary/weekly");
-  const utcEventCounts = await response.json();
-  const heatmapDiv = document.getElementById("weekly");
+  const utc = await fetch("/summary/weekly").then((r) => r.json());
+  const off = new Date().getTimezoneOffset() / 60;
 
-  // Local timezone offset in hours
-  const timezoneOffset = new Date().getTimezoneOffset() / 60;
-
-  let adjustedEventCounts = utcEventCounts.map((event) => {
-    let localHour = event.hour - timezoneOffset; // Adjust hour based on local timezone
-    let localDay = event.day;
-
-    // Handle day and hour adjustments
-    if (localHour < 0) {
-      localHour += 24;
-      localDay = (localDay - 1 + 7) % 7; // Adjust day if hour goes into previous day
-    } else if (localHour >= 24) {
-      localHour -= 24;
-      localDay = (localDay + 1) % 7; // Adjust day if hour goes into next day
+  const adj = utc.map((e) => {
+    let h = e.hour - off,
+      d = e.day;
+    if (h < 0) {
+      h += 24;
+      d = (d + 6) % 7;
+    } else if (h >= 24) {
+      h -= 24;
+      d = (d + 1) % 7;
     }
-
-    return { ...event, day: localDay, hour: Math.floor(localHour) };
+    return { ...e, day: d, hour: h | 0 };
   });
 
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const map = dom("div");
 
-  let heatmapHTML = "";
+  for (let d = 0; d < 7; d++) {
+    const row = dom(
+      "div",
+      { class: "day-row" },
+      dom("div", { class: "day-name" }, days[d])
+    );
 
-  for (let localDayIndex = 0; localDayIndex < 7; localDayIndex++) {
-    heatmapHTML += `<div class="day-row"><div class="day-name">${days[localDayIndex]}</div>`;
-
-    // Loop through each local hour of the day
-    for (let localHour = 0; localHour < 24; localHour++) {
-      const event = adjustedEventCounts.find(
-        (e) => e.day === localDayIndex && e.hour === localHour
+    for (let h = 0; h < 24; h++) {
+      const ev = adj.find((e) => e.day === d && e.hour === h);
+      const cnt = ev ? ev.count : 0;
+      const a = Math.min(cnt / 100, 1);
+      row.append(
+        dom("div", {
+          class: "hour-cell",
+          style: { backgroundColor: cnt ? `rgba(255,79,51,${a})` : "#222" },
+          title: `${days[d]} ${h}:00 – ${cnt} events`,
+        })
       );
-      const eventCount = event ? event.count : 0;
-
-      // Set the cell color based on event count
-      const backgroundColor =
-        eventCount > 0
-          ? `rgba(255, 79, 51, ${Math.min(eventCount / 100, 1)})`
-          : "#222";
-
-      // Add this hour's cell to the day's row
-      heatmapHTML += `<div class="hour-cell" style="background-color: ${backgroundColor};" title="${days[localDayIndex]} ${localHour}:00 - ${eventCount} events"></div>`;
     }
-
-    heatmapHTML += `</div>`;
+    map.append(row);
   }
 
-  heatmapDiv.innerHTML = heatmapHTML;
+  document.getElementById("weekly").replaceChildren(map);
 }
 
-let world;
+/* --------------------------------------------------------------------------
+   Rotating globe
+   -------------------------------------------------------------------------- */
+let world; // Globe.js instance (cached)
 
 async function renderGlobe() {
-  const response = await fetch("/sessions/map");
-  const coordinates = await response.json();
-  const globeDiv = document.getElementById("globe");
-  const globeLeaderboardDiv = document.getElementById("globeleaderboard");
+  const coords = await fetch("/sessions/map").then((r) => r.json());
 
-  const top10 = coordinates.sort((a, b) => b.size - a.size).slice(0, 12);
-  globeLeaderboardDiv.innerHTML = `
-                    ${top10
-                      .map((location) => {
-                        return `<div class="city">${location.city}</div>`;
-                      })
-                      .join("")}`;
+  /* leaderboard */
+  const lb = coords
+    .slice()
+    .sort((a, b) => b.size - a.size)
+    .slice(0, 12)
+    .map((c) => dom("div", { class: "city" }, c.city));
+  document.getElementById("globeleaderboard").replaceChildren(...lb);
 
+  /* 3-D globe */
   if (!world) {
     world = Globe()
       .width(600)
@@ -467,16 +469,24 @@ async function renderGlobe() {
       .enablePointerInteraction(false)
       .globeImageUrl("third-party/earth-dark.jpg")
       .pointAltitude("size")
-      .pointColor("color")(globeDiv);
+      .pointColor("color")(document.getElementById("globe"));
 
     world.controls().autoRotate = true;
     world.controls().autoRotateSpeed = 1;
   }
 
-  world.pointsData(coordinates);
+  /* clamp incoming values */
+  const safeCoords = coords.map((c) => ({
+    ...c,
+    size: Math.min(Math.max(+c.size || 0.01, 0.01), 0.5),
+    color: /^#?[0-9a-f]{3,8}$/i.test(c.color) ? c.color : "#ff4f33",
+  }));
+  world.pointsData(safeCoords);
 }
 
-// Fetch and render all analytics
+/* --------------------------------------------------------------------------
+   Bootstrapping & live refresh
+   -------------------------------------------------------------------------- */
 async function fetchAndRenderAnalytics() {
   try {
     await Promise.all([
@@ -486,33 +496,29 @@ async function fetchAndRenderAnalytics() {
       renderSummary(),
       renderHourlySummary(),
       renderUrls(),
-      // renderBrowsers(),
+      renderBrowsers(),
       renderReferrers(),
       renderWeeklyHeatmap(),
       renderGlobe(),
     ]);
-  } catch (error) {
-    console.error("Error fetching analytics:", error);
+  } catch (e) {
+    console.error("Error fetching analytics:", e);
   }
 }
-
-// Initial render
-fetchAndRenderAnalytics();
 
 function refreshAnalytics() {
-  if (!document.hidden) {
-    fetchAndRenderAnalytics();
+  if (document.hidden) return;
+  fetchAndRenderAnalytics();
 
-    // This just indicates that the page is refreshing
-    const live = document.getElementById("live");
-    live.style.backgroundColor = "red";
-    setTimeout(() => {
-      live.style.backgroundColor = "#e2e2e2";
-      live.classList.remove("fresh");
-    }, 9000);
-  }
+  const live = document.getElementById("live");
+  live.style.backgroundColor = "red";
+  setTimeout(() => {
+    live.style.backgroundColor = "#e2e2e2";
+    live.classList.remove("fresh");
+  }, 9000);
 }
 
-// Rerender every 10 seconds
+/* initial paint & schedule */
+fetchAndRenderAnalytics();
 setInterval(refreshAnalytics, 10_000);
 document.addEventListener("visibilitychange", refreshAnalytics);

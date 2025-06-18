@@ -7,11 +7,13 @@ use actix_web::{http, web, HttpRequest, HttpResponse, Responder};
 use chrono::Utc;
 use diesel::prelude::*;
 use diesel::result::Error;
+use log::{info, warn, error, debug};
 use std::sync::Arc;
 use ulid::Ulid;
 use woothee::parser::Parser;
 
 fn generate_analytics_js(cid: &str, app_url: &str) -> String {
+    debug!("📝 Generating analytics JS for collector: {}", cid);
     format!(
         r#""use strict";
 (function() {{
@@ -96,34 +98,79 @@ fn create_collector(
     os_option: Option<String>,
     browser_option: Option<String>,
 ) -> Result<String, Error> {
+    debug!(
+        "🏗️ Creating collector - Origin: {}, Country: {}, City: {}, OS: {:?}, Browser: {:?}",
+        origin_str, lookup_country, lookup_city, os_option, browser_option
+    );
+
     use crate::schema::collectors::dsl::*;
 
-    let mut conn = pool.get().expect("couldn't get db connection from pool");
+    let mut conn = match pool.get() {
+        Ok(conn) => {
+            debug!("🔗 Database connection established for collector creation");
+            conn
+        }
+        Err(e) => {
+            error!("❌ Failed to get database connection for collector creation: {}", e);
+            return Err(Error::RollbackTransaction);
+        }
+    };
 
+    let collector_id = Ulid::new().to_string();
     let new_collector = Collector {
-        id: Ulid::new().to_string(),
+        id: collector_id.clone(),
         origin: origin_str.to_string(),
         country: lookup_country.to_string(),
         city: lookup_city.to_string(),
-        os: os_option,
-        browser: browser_option,
+        os: os_option.clone(),
+        browser: browser_option.clone(),
         timestamp: Utc::now().naive_utc(),
     };
 
-    diesel::insert_into(collectors)
+    match diesel::insert_into(collectors)
         .values(&new_collector)
-        .execute(&mut conn)?;
-
-    Ok(new_collector.id)
+        .execute(&mut conn)
+    {
+        Ok(_) => {
+            info!(
+                "✅ Collector created successfully - ID: {}, Origin: {}, Country: {}, City: {}",
+                collector_id, origin_str, lookup_country, lookup_city
+            );
+            Ok(collector_id)
+        }
+        Err(e) => {
+            error!(
+                "❌ Failed to insert collector - Origin: {}, Error: {}",
+                origin_str, e
+            );
+            Err(e)
+        }
+    }
 }
 
 async fn create_collector_from_request(
     req: HttpRequest,
     pool: web::Data<DbPool>,
 ) -> Result<Result<String, Error>, BlockingError> {
+    let client_ip = req
+        .headers()
+        .get("X-Forwarded-For")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+        .or_else(|| req.peer_addr().map(|addr| addr.ip().to_string()))
+        .unwrap_or_else(|| "unknown".to_string());
+
     let origin = req.headers().get("Origin").map_or_else(
-        || "unknown".to_owned(),
+        || {
+            warn!("⚠️ No Origin header found - IP: {}", client_ip);
+            "unknown".to_owned()
+        },
         |v| v.to_str().unwrap_or("unknown").to_owned(),
+    );
+
+    info!(
+        "🔍 Collector creation request - IP: {}, Origin: {}",
+        client_ip, origin
     );
 
     let db_path = "data/GeoLite2-City.mmdb";
@@ -133,23 +180,40 @@ async fn create_collector_from_request(
         .and_then(|v| v.to_str().ok());
     let ip: &str = real_ip.unwrap_or("0.0.0.0");
 
+    debug!("🌍 Using IP for GeoIP lookup: {}", ip);
+
     let mut os: Option<String> = None;
     let mut browser: Option<String> = None;
 
     if let Some(user_agent_string) = req.headers().get("User-Agent") {
         if let Ok(ua_string) = user_agent_string.to_str() {
+            debug!("🔍 Parsing User-Agent: {}", ua_string);
             let parser = Parser::new();
             let result = parser.parse(ua_string);
             if let Some(ref parsed_result) = result {
                 os = Some(parsed_result.os.to_string());
                 browser = Some(parsed_result.name.to_string());
+                debug!(
+                    "🖥️ Parsed User-Agent - OS: {:?}, Browser: {:?}",
+                    os, browser
+                );
+            } else {
+                warn!("⚠️ Failed to parse User-Agent: {}", ua_string);
             }
         }
+    } else {
+        warn!("⚠️ No User-Agent header found - IP: {}", client_ip);
     }
 
     let (lookup_country, lookup_city) = match geoip_lookup(ip, db_path) {
-        Ok((_country, _city)) => (_country.to_owned(), _city.to_owned()),
-        Err(_) => ("Unknown".to_owned(), "Unknown".to_owned()),
+        Ok((country, city)) => {
+            debug!("🌍 GeoIP lookup successful - IP: {}, Country: {}, City: {}", ip, country, city);
+            (country, city)
+        }
+        Err(e) => {
+            warn!("⚠️ GeoIP lookup failed - IP: {}, Error: {}", ip, e);
+            ("Unknown".to_owned(), "Unknown".to_owned())
+        }
     };
 
     web::block(move || {
@@ -170,43 +234,68 @@ pub async fn serve_collector_js(
     config: web::Data<Arc<Config>>,
     pool: web::Data<DbPool>,
 ) -> impl Responder {
+    let client_ip = req
+        .headers()
+        .get("X-Forwarded-For")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+        .or_else(|| req.peer_addr().map(|addr| addr.ip().to_string()))
+        .unwrap_or_else(|| "unknown".to_string());
+
+    info!("📜 Analytics JS request - IP: {}", client_ip);
+
     let collector_result = create_collector_from_request(req, pool).await;
 
     match collector_result {
         Ok(collector_id) => match collector_id {
             Ok(id) => {
+                debug!("📜 Generating analytics JS for collector: {}", id);
                 let js_content = generate_analytics_js(&id, &config.app_url);
+                info!("✅ Analytics JS served successfully - Collector: {}, IP: {}", id, client_ip);
                 HttpResponse::Ok()
                     .insert_header((http::header::CACHE_CONTROL, "public, max-age=1800")) // cache for 30 minutes
                     .content_type("application/javascript")
                     .body(js_content)
             }
             Err(e) => {
-                eprintln!("Error creating collector: {}", e);
-                HttpResponse::InternalServerError().finish()
+                error!("❌ Error creating collector for JS request - IP: {}, Error: {}", client_ip, e);
+                HttpResponse::InternalServerError().json("Failed to create collector")
             }
         },
         Err(e) => {
-            eprintln!("Error serving collector JS: {}", e);
-            HttpResponse::InternalServerError().finish()
+            error!("❌ Error serving collector JS - IP: {}, Error: {}", client_ip, e);
+            HttpResponse::InternalServerError().json("Failed to serve analytics JS")
         }
     }
 }
 
 pub async fn post_collector(req: HttpRequest, pool: web::Data<DbPool>) -> impl Responder {
+    let client_ip = req
+        .headers()
+        .get("X-Forwarded-For")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+        .or_else(|| req.peer_addr().map(|addr| addr.ip().to_string()))
+        .unwrap_or_else(|| "unknown".to_string());
+
+    info!("📝 POST collector request - IP: {}", client_ip);
+
     let collector_result = create_collector_from_request(req, pool).await;
 
     match collector_result {
         Ok(collector_id) => match collector_id {
-            Ok(id) => HttpResponse::Ok().json(id),
+            Ok(id) => {
+                info!("✅ Collector created via POST - ID: {}, IP: {}", id, client_ip);
+                HttpResponse::Ok().json(id)
+            }
             Err(e) => {
-                eprintln!("Error creating collector: {}", e);
-                HttpResponse::InternalServerError().finish()
+                error!("❌ Error creating collector via POST - IP: {}, Error: {}", client_ip, e);
+                HttpResponse::InternalServerError().json("Failed to create collector")
             }
         },
         Err(e) => {
-            eprintln!("Error creating collector: {}", e);
-            HttpResponse::InternalServerError().finish()
+            error!("❌ Error processing POST collector request - IP: {}, Error: {}", client_ip, e);
+            HttpResponse::InternalServerError().json("Failed to process collector request")
         }
     }
 }
